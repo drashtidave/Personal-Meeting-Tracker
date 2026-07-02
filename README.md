@@ -98,7 +98,7 @@ To wipe everything the extension stores: `chrome.storage.local.clear()`.
 - Apps Script is free; a personal meeting load is far below Google's daily
   quotas.
 - If the data does not show up on the first run try running from service-worker console
-'''javascript
+```javascript
 chrome.storage.local.get({webAppUrl:"",secret:""}, async c => {
   try {
     const r = await fetch(c.webAppUrl, {method:"POST",
@@ -110,4 +110,4 @@ chrome.storage.local.get({webAppUrl:"",secret:""}, async c => {
     console.log("BODY:", await r.text());
   } catch(e){ console.log("THREW:", e.message); }
 });
-'''
+```
