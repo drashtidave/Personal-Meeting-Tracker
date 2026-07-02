@@ -1,4 +1,4 @@
-# Meeting Time Tracker v2 — Setup
+# Meeting Time Tracker — Setup
 
 Appends **Meeting Name, Date, Start Time, End Time, Duration** to one
 Google Sheet every time you finish a tracked call.
