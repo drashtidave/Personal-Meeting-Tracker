@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body { width: 340px; margin: 0; font: 13px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2933; }
+  header { padding: 12px 14px; background: #1f2933; color: #fff; }
+  header b { font-size: 14px; }
+  .sec { padding: 12px 14px; border-bottom: 1px solid #eee; }
+  label { display:block; font-weight:600; margin-bottom:4px; }
+  input { width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid #ccc; border-radius: 7px; margin-bottom: 10px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  button { cursor:pointer; border:0; border-radius:8px; padding:8px 12px; font-weight:600; }
+  .save { background:#3ba55d; color:#fff; }
+  .ghost { background:#e5e7eb; color:#111; }
+  .status { padding: 10px 14px; color:#374151; font-size:12px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-weight:600; }
+  .ok { background:#dcfce7; color:#166534; }
+  a { color:#2563eb; cursor:pointer; }
+  .summary { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .muted { color:#6b7280; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+  <header><b>⏱️ Meeting Time Tracker</b></header>
+
+  <!-- EDIT form: shown when nothing is saved yet, or after clicking Edit -->
+  <div class="sec" id="form">
+    <label for="url">Google Sheet web app URL</label>
+    <input id="url" type="text" placeholder="https://script.google.com/…/exec" />
+    <label for="secret">Shared secret</label>
+    <input id="secret" type="password" placeholder="same secret as in the script" />
+    <div class="row">
+      <button class="save" id="save">Save</button>
+      <button class="ghost" id="cancelEdit" style="display:none">Cancel</button>
+    </div>
+  </div>
+
+  <!-- SUMMARY: shown when saved -->
+  <div class="sec summary hidden" id="summary">
+    <div>
+      <div class="ok pill">Connected ✓</div>
+      <div class="muted" style="margin-top:6px">Secret ••••••</div>
+    </div>
+    <a id="edit">Edit</a>
+  </div>
+
+  <div class="status" id="status">Loading…</div>
+
+  <div class="sec" style="border-bottom:0">
+    <div class="row">
+      <button class="ghost" id="sync">Sync now</button>
+      <span class="muted" style="font-size:12px">Retries anything not yet in your Sheet.</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
