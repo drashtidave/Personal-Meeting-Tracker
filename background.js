@@ -1,17 +1,17 @@
 // background.js  (v2)
-// Every finished meeting is FIRST buffered in chrome.storage.local ("pending"),
-// then written to your Google Sheet. On a confirmed write it is REMOVED from
-// storage. So local storage only ever holds not-yet-synced meetings.
-// The meeting NAME list ("recentNames") is kept permanently and never cleared.
-
-const active = {}; // tabId -> { platform, name, joinTime }
+// The in-progress session is stored in chrome.storage.local under a per-tab key
+// ("session_<tabId>") so it SURVIVES the MV3 service worker being shut down
+// during a long meeting. On leave (or tab close) we read it back, write the row,
+// and DELETE the session key immediately — so storage never accumulates.
+//
+// "pending" holds finished rows not yet written to the Sheet; they're removed on
+// a confirmed write. "recentNames" (the name picker list) is kept permanently.
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab && sender.tab.id; // popup messages have no tab
 
   if (msg.type === "START" && tabId != null) {
-    active[tabId] = { platform: msg.platform, name: msg.name, joinTime: msg.joinTime };
-    rememberName(msg.name);                 // name kept permanently
+    startSession(tabId, msg);   // persist to storage (survives worker restart)
     return;
   }
   if (msg.type === "END" && tabId != null) {
@@ -27,33 +27,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  if (active[tabId]) finalize(tabId, Date.now()); // closed tab while in call
+  finalize(tabId, Date.now()); // closed tab while in call; finalize checks storage
 });
-chrome.runtime.onStartup.addListener(flushPending);
-chrome.runtime.onInstalled.addListener(flushPending);
+
+chrome.runtime.onStartup.addListener(() => { flushPending(); cleanupStaleSessions(); });
+chrome.runtime.onInstalled.addListener(() => { flushPending(); cleanupStaleSessions(); });
+
+// Save the join info to storage so a killed/restarted worker can still finalize.
+async function startSession(tabId, msg) {
+  await set({ ["session_" + tabId]: { platform: msg.platform, name: msg.name, joinTime: msg.joinTime } });
+  rememberName(msg.name); // name kept permanently for the picker
+}
 
 async function finalize(tabId, leaveTime) {
-  const s = active[tabId];
-  if (!s) return;
-  delete active[tabId];
+  const key = "session_" + tabId;
+  const s = (await get({ [key]: null }))[key];
+  if (!s) return;               // no session for this tab (already finalized, etc.)
+  await remove(key);            // clean up the session immediately — no leftover
 
   const start = new Date(s.joinTime);
   const end = new Date(leaveTime);
   const record = {
-    name: s.name,        // readable string (column B)
+    name: s.name,
+    date: start.toLocaleDateString(),
     start: start.toLocaleTimeString(),
     end: end.toLocaleTimeString(),
     duration: Math.max(0, Math.round((leaveTime - s.joinTime) / 60000)),
-    // Date parts for a REAL date value (column F) — sent as parts so the
-    // Apps Script can build a timezone-safe Date that Sheets treats as a date.
     y: start.getFullYear(),
     m: start.getMonth() + 1,
     d: start.getDate()
   };
 
-  await push("pending", record); // 1) buffer in Chrome storage (survives a crash)
+  await push("pending", record); // buffer the finished row (survives a crash)
   refreshBadge();
-  await flushPending();          // 2) write to Sheet, remove on success
+  await flushPending();          // write to Sheet, remove from pending on success
 }
 
 // Try to write every buffered row; keep only the ones that fail.
@@ -72,12 +79,23 @@ async function flushPending() {
     if (ok) synced++; else stillPending.push(rec);
   }
   await set({
-    pending: stillPending, // 3) synced rows are now gone from Chrome storage
+    pending: stillPending, // synced rows are now gone from Chrome storage
     lastResult: stillPending.length
       ? `Synced ${synced}, ${stillPending.length} still queued`
       : `Synced ${synced} ✓ (cleared from Chrome)`
   });
   refreshBadge();
+}
+
+// Safety net: delete any session keys older than 24h (a crash could orphan one).
+// 24h is safe — no real meeting lasts that long, so this never touches an
+// ongoing call whose worker merely restarted.
+async function cleanupStaleSessions() {
+  const all = await get(null);
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const stale = Object.keys(all).filter(
+    (k) => k.startsWith("session_") && all[k] && all[k].joinTime < cutoff);
+  if (stale.length) await new Promise((res) => chrome.storage.local.remove(stale, res));
 }
 
 // POST one row. text/plain avoids a CORS preflight; host_permissions let the
@@ -112,6 +130,7 @@ function refreshBadge() {
 // tiny promise helpers
 function get(defaults) { return new Promise((res) => chrome.storage.local.get(defaults, res)); }
 function set(obj) { return new Promise((res) => chrome.storage.local.set(obj, res)); }
+function remove(key) { return new Promise((res) => chrome.storage.local.remove(key, res)); }
 async function push(key, item) {
   const cur = (await get({ [key]: [] }))[key];
   cur.push(item);
